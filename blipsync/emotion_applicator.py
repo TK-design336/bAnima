@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from .blend_targets import get_shape_key, reset_pose_value
 from .defaults import merge_unconfigured_high_emotion_weights
 from .layer_applicator import apply_layered_pose, apply_layered_shape
+from .pose_motion import procedural_pose_from_blend
 
 
 def reset_emotion_mapping(emotion_mapping) -> None:
@@ -87,7 +88,8 @@ def apply_emotion_weights(
             if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
                 continue
             bone = pose_bind.armature.pose.bones[pose_bind.pose_bone]
-            procedural = max(0.0, ratio * pose_bind.weight * settings.max_blend_value)
+            drive = max(0.0, ratio * settings.max_blend_value)
+            procedural = procedural_pose_from_blend(pose_bind, drive)
             pose_targets[
                 (
                     int(pose_bind.armature.as_pointer()),

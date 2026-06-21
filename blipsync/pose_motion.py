@@ -51,3 +51,8 @@ def motion_pose_final_value(pose_bind, drive: float, *, offset: float = 0.0) -> 
         return 1.0 + (amount - 1.0) * blend
 
     return amount * drive
+
+
+def procedural_pose_from_blend(pose_bind, blend: float) -> float:
+    """Map a lip/emotion/blink blend drive to a layered pose procedural value."""
+    return motion_pose_final_value(pose_bind, max(0.0, blend))

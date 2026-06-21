@@ -303,6 +303,7 @@ def _draw_phoneme_expr(layout, expr, expr_index: int, mapping_index: int):
         morph_remove_op="blipsync.remove_morph_bind",
         pose_add_op="blipsync.add_pose_bind",
         pose_remove_op="blipsync.remove_pose_bind",
+        motion_pose_binds=True,
     )
     layout.separator()
 
@@ -315,6 +316,7 @@ def _draw_emotion_expr(layout, expr, expr_index: int, mapping_index: int):
         pose_add_op="blipsync.add_emotion_pose_bind",
         pose_remove_op="blipsync.remove_emotion_pose_bind",
         expr_index_prop="emotion_index",
+        motion_pose_binds=True,
     )
     layout.separator()
 
@@ -543,6 +545,7 @@ def _draw_blink_eye_slot(layout, eye_slot, label: str, mapping_index: int, eye_i
             pose_add_op="blipsync.add_blink_pose_bind",
             pose_remove_op="blipsync.remove_blink_pose_bind",
             expr_index_prop="eye_index",
+            motion_pose_binds=True,
         ),
         preview=True,
     )

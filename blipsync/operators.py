@@ -287,6 +287,10 @@ class BLIpsync_OT_add_pose_bind(Operator):
         if self.phoneme_index < 0 or self.phoneme_index >= len(mapping.phoneme_exprs):
             return {"CANCELLED"}
         mapping.phoneme_exprs[self.phoneme_index].pose_binds.add()
+        bind = mapping.phoneme_exprs[self.phoneme_index].pose_binds[-1]
+        from .pose_motion import default_motion_amount
+
+        bind.motion_amount = default_motion_amount(bind.pose_axis)
         return {"FINISHED"}
 
 
@@ -396,6 +400,10 @@ class BLIpsync_OT_add_emotion_pose_bind(Operator):
         if self.emotion_index < 0 or self.emotion_index >= len(mapping.emotion_exprs):
             return {"CANCELLED"}
         mapping.emotion_exprs[self.emotion_index].pose_binds.add()
+        bind = mapping.emotion_exprs[self.emotion_index].pose_binds[-1]
+        from .pose_motion import default_motion_amount
+
+        bind.motion_amount = default_motion_amount(bind.pose_axis)
         return {"FINISHED"}
 
 
@@ -502,6 +510,10 @@ class BLIpsync_OT_add_blink_pose_bind(Operator):
             return {"CANCELLED"}
         eye_slot = _blink_eye_slot(settings, self.mapping_index, self.eye_index)
         eye_slot.pose_binds.add()
+        bind = eye_slot.pose_binds[-1]
+        from .pose_motion import default_motion_amount
+
+        bind.motion_amount = default_motion_amount(bind.pose_axis)
         return {"FINISHED"}
 
 

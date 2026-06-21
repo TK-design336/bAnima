@@ -147,7 +147,7 @@ class BLIpsyncPoseBind(PropertyGroup):
     )
     weight: FloatProperty(
         name="weight",
-        description="音素が最大のときのポーズ変形量（0〜1）",
+        description="マイクロモーション（頭部揺れ・視線）用のスケール係数（0〜1）",
         default=1.0,
         min=0.0,
         max=1.0,

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from .blend_targets import get_shape_key, reset_pose_value
 from .defaults import blink_mapping_is_configured
 from .layer_applicator import apply_layered_pose, apply_layered_shape
+from .pose_motion import procedural_pose_from_blend
 
 
 def reset_blink_eye_slot(eye_slot) -> None:
@@ -82,7 +83,7 @@ def _apply_eye_slot(
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
             continue
         bone = pose_bind.armature.pose.bones[pose_bind.pose_bone]
-        procedural = max(0.0, blink_blend * pose_bind.weight)
+        procedural = procedural_pose_from_blend(pose_bind, blink_blend)
         pose_targets[
             (
                 int(pose_bind.armature.as_pointer()),

@@ -23,10 +23,7 @@ from .blend_targets import (
     set_pose_value as _set_pose_value,
 )
 from .layer_applicator import apply_layered_pose, apply_layered_shape
-
-
-def _blend_amount(ratio: float, weight: float, volume: float, max_blend: float) -> float:
-    return max(0.0, ratio * weight * volume * max_blend)
+from .pose_motion import procedural_pose_from_blend
 
 
 def reset_mapping(phoneme_mapping) -> None:
@@ -100,9 +97,8 @@ def apply_weights(
             if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
                 continue
             bone = pose_bind.armature.pose.bones[pose_bind.pose_bone]
-            procedural = _blend_amount(
-                ratio, pose_bind.weight, volume, settings.max_blend_value,
-            )
+            drive = max(0.0, ratio * volume * settings.max_blend_value)
+            procedural = procedural_pose_from_blend(pose_bind, drive)
             pose_targets[
                 (
                     int(pose_bind.armature.as_pointer()),

@@ -1,0 +1,8 @@
+blipsync/vendor/
+blipsync/data/emotion_model/
+blipsync/data/audeering_model/
+__pycache__/
+*.pyc
+*.zip
+uLipSync-main/
+.cursor/

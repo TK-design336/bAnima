@@ -12,8 +12,8 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $blipsyncDir = Join-Path $root "blipsync"
 $banimaDir = Join-Path $root "banima"
 $scriptsDir = Join-Path $root "scripts"
-$blipsyncVersion = "0.6.24"
-$banimaVersion = "0.2.51"
+$blipsyncVersion = "0.6.33"
+$banimaVersion = "0.2.60"
 
 function Resolve-BlenderPython {
     param([string]$ExplicitPath)

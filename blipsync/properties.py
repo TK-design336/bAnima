@@ -710,6 +710,34 @@ class BLIpsyncSceneSettings(PropertyGroup):
     debug_emotion_angry: FloatProperty(name="Angry", default=0.0, precision=3)
     debug_emotion_neutral: FloatProperty(name="Neutral", default=0.0, precision=3)
 
+    realtime_during_render: BoolProperty(
+        name="レンダー時もリアルタイム適用",
+        description=(
+            "オン（既定）: レンダー中もビューポートと同様に適用（フレーム評価後・撮影直前に反映）。"
+            "ベイク後に各モジュールを OFF にすればキーフレームのみで高速レンダー。"
+            "オフ: レンダー中はリアルタイム適用をスキップ（ベイク済みキーフレームのみ）"
+        ),
+        default=True,
+    )
+    debug_profile_ticks: BoolProperty(
+        name="ティック処理時間をコンソールへ出力",
+        description="再生・スクラブ時の blipsync 処理時間を System Console に出力",
+        default=False,
+    )
+    debug_profile_render: BoolProperty(
+        name="レンダー時プロファイルをファイル保存",
+        description=(
+            "「レンダー時もリアルタイム適用」がオンのとき、"
+            "各フレームの処理時間を .blend と同じフォルダへ保存"
+        ),
+        default=False,
+    )
+    render_rt_fixup_v1: BoolProperty(
+        name="Render RT Fixup",
+        default=False,
+        options={"HIDDEN"},
+    )
+
 
 _LEGACY_CLASSES = (
     "BLIpsyncChannelItem",

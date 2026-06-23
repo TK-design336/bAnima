@@ -228,21 +228,18 @@ def capture_additive_bake_bases(
     )):
         return cache
 
-    original_frame = scene.frame_current
-    try:
-        for frame in frames:
-            scene.frame_set(frame)
-            if phoneme_mappings:
-                cache.capture_phoneme_mappings(phoneme_mappings, frame)
-            if emotion_mappings:
-                cache.capture_emotion_mappings(emotion_mappings, frame)
-            if blink_mappings:
-                cache.capture_blink_mappings(blink_mappings, frame)
-            if breathing_mappings:
-                cache.capture_breathing_mappings(breathing_mappings, frame)
-            if micro_motion_mappings:
-                cache.capture_micro_motion_mappings(micro_motion_mappings, frame)
-    finally:
-        scene.frame_set(original_frame)
+    # FCurve evaluation only — do not scene.frame_set() here. frame_set during bake
+    # would fire frame_change_post and re-run lip/emotion/blink/motion per frame.
+    for frame in frames:
+        if phoneme_mappings:
+            cache.capture_phoneme_mappings(phoneme_mappings, frame)
+        if emotion_mappings:
+            cache.capture_emotion_mappings(emotion_mappings, frame)
+        if blink_mappings:
+            cache.capture_blink_mappings(blink_mappings, frame)
+        if breathing_mappings:
+            cache.capture_breathing_mappings(breathing_mappings, frame)
+        if micro_motion_mappings:
+            cache.capture_micro_motion_mappings(micro_motion_mappings, frame)
 
     return cache

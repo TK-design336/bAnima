@@ -804,6 +804,8 @@ def _draw_breathing_params(layout, settings) -> None:
 
 def _draw_micro_motion_params(layout, settings) -> None:
     if not settings.micro_motion_enabled:
+        box = layout.box()
+        box.label(text="基礎設定で Enable Micro Motion をオンにしてください", icon="INFO")
         return
     layout.label(text="頭部揺れ", icon="OBJECT_DATA")
     layout.prop(settings, "micro_head_sway_amplitude")
@@ -897,6 +899,12 @@ def _draw_advanced(layout, settings):
     layout.prop(settings, "emotion_threshold")
     layout.separator()
     _draw_emotion_vad_pivot_help(layout, settings)
+    layout.separator()
+    layout.label(text="診断 / レンダー", icon="CONSOLE")
+    layout.prop(settings, "realtime_during_render")
+    layout.prop(settings, "debug_profile_ticks")
+    layout.prop(settings, "debug_profile_render")
+    layout.operator("blipsync.profile_tick", text="現在フレームの処理時間を計測", icon="TIME")
 
 
 class BLIpsync_UL_channel_targets(bpy.types.UIList):

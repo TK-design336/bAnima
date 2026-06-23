@@ -18,6 +18,7 @@ from .defaults import (
 )
 from .bake_keyframes import BakeKeyframeTracker
 from .bake_base_cache import capture_additive_bake_bases
+from .handlers import suspend_realtime_handlers
 from .blink_applicator import apply_blink_mapping
 from .blink_engine import (
     blink_seed,
@@ -835,47 +836,50 @@ class BLIpsync_OT_bake(Operator):
 
         wm = context.window_manager
         wm.progress_begin(0, total)
+        original_frame = scene.frame_current
         try:
-            for idx, frame in enumerate(frames):
-                scene.frame_set(frame)
-                for target in targets:
-                    if bake_lip:
-                        mapping = get_channel_mapping(settings, target)
-                        if mapping is None:
-                            continue
-                        result = lip_engine.analyze_channel(scene, frame, target)
-                        weights = lip_engine.update_smoothed_weights(
-                            scene, result, step / fps, target.channel, mapping,
-                        )
-                        apply_weights(
-                            scene,
-                            weights,
-                            mapping,
-                            insert_keyframes=True,
-                            frame=frame,
-                            keyframe_tracker=keyframe_tracker,
-                            base_cache=base_cache,
-                        )
-                    if bake_emotion:
-                        emotion_mapping = get_channel_emotion_mapping(settings, target)
-                        if emotion_mapping is None:
-                            continue
-                        emotion_result = emotion_engine.analyze_channel(scene, frame, target)
-                        emotion_weights = emotion_engine.update_smoothed_weights(
-                            scene, emotion_result, step / fps, target.channel, emotion_mapping,
-                        )
-                        apply_emotion_weights(
-                            scene,
-                            emotion_weights,
-                            emotion_mapping,
-                            insert_keyframes=True,
-                            frame=frame,
-                            keyframe_tracker=keyframe_tracker,
-                            base_cache=base_cache,
-                        )
-                if idx % 10 == 0:
-                    wm.progress_update(idx)
+            with suspend_realtime_handlers():
+                for idx, frame in enumerate(frames):
+                    scene.frame_set(frame)
+                    for target in targets:
+                        if bake_lip:
+                            mapping = get_channel_mapping(settings, target)
+                            if mapping is None:
+                                continue
+                            result = lip_engine.analyze_channel(scene, frame, target)
+                            weights = lip_engine.update_smoothed_weights(
+                                scene, result, step / fps, target.channel, mapping,
+                            )
+                            apply_weights(
+                                scene,
+                                weights,
+                                mapping,
+                                insert_keyframes=True,
+                                frame=frame,
+                                keyframe_tracker=keyframe_tracker,
+                                base_cache=base_cache,
+                            )
+                        if bake_emotion:
+                            emotion_mapping = get_channel_emotion_mapping(settings, target)
+                            if emotion_mapping is None:
+                                continue
+                            emotion_result = emotion_engine.analyze_channel(scene, frame, target)
+                            emotion_weights = emotion_engine.update_smoothed_weights(
+                                scene, emotion_result, step / fps, target.channel, emotion_mapping,
+                            )
+                            apply_emotion_weights(
+                                scene,
+                                emotion_weights,
+                                emotion_mapping,
+                                insert_keyframes=True,
+                                frame=frame,
+                                keyframe_tracker=keyframe_tracker,
+                                base_cache=base_cache,
+                            )
+                    if idx % 10 == 0:
+                        wm.progress_update(idx)
         finally:
+            scene.frame_set(original_frame)
             wm.progress_end()
 
         if bake_lip and bake_emotion:
@@ -955,39 +959,42 @@ class BLIpsync_OT_bake_blink(Operator):
 
         wm = context.window_manager
         wm.progress_begin(0, total)
+        original_frame = scene.frame_current
         try:
-            for idx, frame in enumerate(frames):
-                scene.frame_set(frame)
-                time_sec = frame / max(fps, 1e-8)
-                for plan in blink_plans:
-                    mapping = plan["mapping"]
-                    amount = compute_blink_amount_from_schedule(
-                        time_sec, plan["schedule"], plan["close_d"], plan["open_d"],
-                    )
-                    jitter_left, jitter_right = 0.0, 0.0
-                    jitter_amount = float(mapping.fac_jitter_amount)
-                    jitter_speed = float(settings.blink_eyelid_jitter_speed)
-                    if jitter_amount > 1e-8 and jitter_speed > 1e-8:
-                        jitter_left = compute_eyelid_jitter(
-                            time_sec, plan["seed"], jitter_speed, eye_phase=plan["phase_left"],
+            with suspend_realtime_handlers():
+                for idx, frame in enumerate(frames):
+                    scene.frame_set(frame)
+                    time_sec = frame / max(fps, 1e-8)
+                    for plan in blink_plans:
+                        mapping = plan["mapping"]
+                        amount = compute_blink_amount_from_schedule(
+                            time_sec, plan["schedule"], plan["close_d"], plan["open_d"],
                         )
-                        jitter_right = compute_eyelid_jitter(
-                            time_sec, plan["seed"], jitter_speed, eye_phase=plan["phase_right"],
+                        jitter_left, jitter_right = 0.0, 0.0
+                        jitter_amount = float(mapping.fac_jitter_amount)
+                        jitter_speed = float(settings.blink_eyelid_jitter_speed)
+                        if jitter_amount > 1e-8 and jitter_speed > 1e-8:
+                            jitter_left = compute_eyelid_jitter(
+                                time_sec, plan["seed"], jitter_speed, eye_phase=plan["phase_left"],
+                            )
+                            jitter_right = compute_eyelid_jitter(
+                                time_sec, plan["seed"], jitter_speed, eye_phase=plan["phase_right"],
+                            )
+                        apply_blink_mapping(
+                            scene,
+                            amount,
+                            mapping,
+                            fac_jitter_left=jitter_left,
+                            fac_jitter_right=jitter_right,
+                            insert_keyframes=True,
+                            frame=frame,
+                            keyframe_tracker=keyframe_tracker,
+                            base_cache=base_cache,
                         )
-                    apply_blink_mapping(
-                        scene,
-                        amount,
-                        mapping,
-                        fac_jitter_left=jitter_left,
-                        fac_jitter_right=jitter_right,
-                        insert_keyframes=True,
-                        frame=frame,
-                        keyframe_tracker=keyframe_tracker,
-                        base_cache=base_cache,
-                    )
-                if idx % 10 == 0:
-                    wm.progress_update(idx)
+                    if idx % 10 == 0:
+                        wm.progress_update(idx)
         finally:
+            scene.frame_set(original_frame)
             wm.progress_end()
 
         settings.blink_enabled = False
@@ -1067,41 +1074,44 @@ class BLIpsync_OT_bake_motion(Operator):
 
         wm = context.window_manager
         wm.progress_begin(0, total)
+        original_frame = scene.frame_current
         try:
-            for idx, frame in enumerate(frames):
-                scene.frame_set(frame)
-                time_sec = frame / max(fps, 1e-8)
-                if bake_breathing:
-                    phase = compute_breath_phase(
-                        time_sec,
-                        settings.breathing_bpm,
-                        settings.breathing_exhale_ratio,
-                    )
-                    for mapping in breathing_mappings:
-                        apply_breathing_mapping(
-                            scene,
-                            phase,
-                            mapping,
-                            insert_keyframes=True,
-                            frame=frame,
-                            keyframe_tracker=keyframe_tracker,
-                            base_cache=base_cache,
+            with suspend_realtime_handlers():
+                for idx, frame in enumerate(frames):
+                    scene.frame_set(frame)
+                    time_sec = frame / max(fps, 1e-8)
+                    if bake_breathing:
+                        phase = compute_breath_phase(
+                            time_sec,
+                            settings.breathing_bpm,
+                            settings.breathing_exhale_ratio,
                         )
-                if bake_micro_motion:
-                    for mapping in micro_mappings:
-                        state = compute_micro_motion_state(time_sec, mapping, scene, settings)
-                        apply_micro_motion_mapping(
-                            scene,
-                            state,
-                            mapping,
-                            insert_keyframes=True,
-                            frame=frame,
-                            keyframe_tracker=keyframe_tracker,
-                            base_cache=base_cache,
-                        )
-                if idx % 10 == 0:
-                    wm.progress_update(idx)
+                        for mapping in breathing_mappings:
+                            apply_breathing_mapping(
+                                scene,
+                                phase,
+                                mapping,
+                                insert_keyframes=True,
+                                frame=frame,
+                                keyframe_tracker=keyframe_tracker,
+                                base_cache=base_cache,
+                            )
+                    if bake_micro_motion:
+                        for mapping in micro_mappings:
+                            state = compute_micro_motion_state(time_sec, mapping, scene, settings)
+                            apply_micro_motion_mapping(
+                                scene,
+                                state,
+                                mapping,
+                                insert_keyframes=True,
+                                frame=frame,
+                                keyframe_tracker=keyframe_tracker,
+                                base_cache=base_cache,
+                            )
+                    if idx % 10 == 0:
+                        wm.progress_update(idx)
         finally:
+            scene.frame_set(original_frame)
             wm.progress_end()
 
         if bake_breathing and bake_micro_motion:
@@ -1178,6 +1188,28 @@ class BLIpsync_OT_reload_profile(Operator):
         return {"FINISHED"}
 
 
+class BLIpsync_OT_profile_tick(Operator):
+    bl_idname = "blipsync.profile_tick"
+    bl_label = "Profile Current Frame"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        from .handlers import profile_tick_at_frame
+
+        scene = context.scene
+        if not getattr(scene, "blipsync", None):
+            self.report({"WARNING"}, "blipsync が未初期化です")
+            return {"CANCELLED"}
+        report, path = profile_tick_at_frame(scene, scene.frame_current)
+        print(report)
+        total_line = next((line for line in report.splitlines() if "TOTAL:" in line), "")
+        self.report(
+            {"INFO"},
+            f"計測完了 {total_line.strip()} — ログ: {path}",
+        )
+        return {"FINISHED"}
+
+
 classes = (
     BLIpsync_OT_init_scene,
     BLIpsync_OT_sync_channels,
@@ -1224,6 +1256,7 @@ classes = (
     BLIpsync_OT_install_emotion_deps,
     BLIpsync_OT_refresh_emotion_deps,
     BLIpsync_OT_reload_profile,
+    BLIpsync_OT_profile_tick,
 )
 
 

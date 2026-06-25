@@ -20,6 +20,7 @@ from .motion_applicator import (
     _apply_morph_amount_to_bind_slot,
     _apply_phase_to_bind_slot,
 )
+from .defaults import scene_has_active_previews
 from .properties import MICRO_MOTION_GAZE_SHAPE_SLOTS
 from .tick_base_cache import capture_scene_preview_bases
 
@@ -39,13 +40,31 @@ def _tag_redraw_3d(context) -> None:
 def on_preview_amount_changed(context) -> None:
     if context is None:
         return
-    from .handlers import _is_playing, _tick_scene
+    from .handlers import _is_playing
+    from .defaults import ensure_scene_defaults
 
     if _is_playing():
         return
     scene = context.scene
-    scene.frame_set(scene.frame_current)
-    _tick_scene(scene, playing=False)
+    if not getattr(scene, "blipsync", None):
+        return
+    ensure_scene_defaults(scene)
+    settings = scene.blipsync
+    if settings.__class__.__name__ == "_PropertyDeferred":
+        return
+    frame = scene.frame_current
+    if not scene_has_active_previews(settings):
+        from .motion_layer_state import revert_motion_layer_state
+
+        revert_motion_layer_state()
+        scene.frame_set(frame)
+        _tag_redraw_3d(context)
+        return
+    from .motion_layer_state import revert_motion_layer_state
+
+    revert_motion_layer_state()
+    base_cache = capture_scene_preview_bases(scene, settings, frame, refresh_frame=True)
+    apply_scene_previews(scene, base_cache=base_cache, frame=frame)
     _tag_redraw_3d(context)
 
 
@@ -67,13 +86,10 @@ def apply_scene_previews(
 
     for mapping in settings.phoneme_mappings:
         weights = {"__volume__": 1.0}
-        has_preview = False
         for expr in mapping.phoneme_exprs:
-            amount = float(expr.preview_amount)
-            if amount > 1e-8:
-                weights[expr.label] = amount
-                has_preview = True
-        if not has_preview:
+            weights[expr.label] = float(expr.preview_amount)
+        if not any(float(expr.preview_amount) > 1e-8 for expr in mapping.phoneme_exprs):
+            apply_weights(scene, weights, mapping, reset=True, **apply_kw)
             continue
         apply_weights(
             scene,
@@ -84,14 +100,9 @@ def apply_scene_previews(
         )
 
     for mapping in settings.emotion_mappings:
-        weights = {}
-        has_preview = False
-        for expr in mapping.emotion_exprs:
-            amount = float(expr.preview_amount)
-            if amount > 1e-8:
-                weights[expr.label] = amount
-                has_preview = True
-        if not has_preview:
+        weights = {expr.label: float(expr.preview_amount) for expr in mapping.emotion_exprs}
+        if not any(v > 1e-8 for v in weights.values()):
+            apply_emotion_weights(scene, weights, mapping, reset=True, **apply_kw)
             continue
         apply_emotion_weights(
             scene,
@@ -104,18 +115,18 @@ def apply_scene_previews(
     for mapping in settings.blink_mappings:
         for eye_slot in (mapping.left_eye, mapping.right_eye):
             amount = float(eye_slot.preview_amount)
-            if amount <= 1e-8:
-                continue
-            _apply_eye_slot(eye_slot, amount, max_blend, **apply_kw)
+            _apply_eye_slot(
+                eye_slot,
+                amount,
+                max_blend,
+                **apply_kw,
+            )
 
     for mapping in settings.breathing_mappings:
         slot = mapping.targets
-        amount = float(slot.preview_amount)
-        if amount <= 1e-8:
-            continue
         _apply_phase_to_bind_slot(
             slot,
-            amount,
+            float(slot.preview_amount),
             max_blend,
             motion_amount_mode=True,
             **apply_kw,

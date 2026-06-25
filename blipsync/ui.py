@@ -321,6 +321,45 @@ def _draw_emotion_expr(layout, expr, expr_index: int, mapping_index: int):
     layout.separator()
 
 
+def _is_animation_playing() -> bool:
+    wm = getattr(bpy.context, "window_manager", None)
+    if wm is None:
+        return False
+    for window in wm.windows:
+        screen = window.screen
+        if screen is not None and screen.is_animation_playing:
+            return True
+    return False
+
+
+def _emotion_debug_values(settings, scene):
+    emotion = settings.debug_emotion
+    happy = float(settings.debug_emotion_happy)
+    sad = float(settings.debug_emotion_sad)
+    angry = float(settings.debug_emotion_angry)
+    neutral = float(settings.debug_emotion_neutral)
+    if not settings.emotion_enabled or not _is_animation_playing():
+        return emotion, happy, sad, angry, neutral
+
+    from .defaults import resolve_enabled_channel_targets
+    from .emotion_engine import get_emotion_engine
+
+    targets = resolve_enabled_channel_targets(settings)
+    if not targets:
+        return emotion, happy, sad, angry, neutral
+    index = min(max(0, settings.channel_targets_index), len(targets) - 1)
+    result = get_emotion_engine().last_results.get(targets[index].channel)
+    if result is None:
+        return emotion, happy, sad, angry, neutral
+    return (
+        str(result.dominant),
+        float(result.happy),
+        float(result.sad),
+        float(result.angry),
+        float(result.neutral),
+    )
+
+
 def _draw_basic(layout, scene, settings):
     layout.prop(settings, "enabled")
     layout.prop(settings, "emotion_enabled")
@@ -386,14 +425,15 @@ def _draw_basic(layout, scene, settings):
 
     if settings.emotion_enabled:
         layout.label(text=f"感情エンジン: {get_emotion_backend()}")
+        emotion, happy, sad, angry, neutral = _emotion_debug_values(settings, scene)
         row = layout.row(align=True)
-        row.label(text=f"感情: {settings.debug_emotion}")
+        row.label(text=f"感情: {emotion}")
         row.label(
             text=(
-                f"H:{settings.debug_emotion_happy:.2f} "
-                f"S:{settings.debug_emotion_sad:.2f} "
-                f"A:{settings.debug_emotion_angry:.2f} "
-                f"N:{settings.debug_emotion_neutral:.2f}"
+                f"H:{happy:.2f} "
+                f"S:{sad:.2f} "
+                f"A:{angry:.2f} "
+                f"N:{neutral:.2f}"
             ),
         )
 
@@ -902,6 +942,14 @@ def _draw_advanced(layout, settings):
     layout.separator()
     layout.label(text="診断 / レンダー", icon="CONSOLE")
     layout.prop(settings, "realtime_during_render")
+    if settings.realtime_during_render:
+        layout.prop(settings, "render_apply_mode")
+        if settings.render_apply_mode == "RNA":
+            warn = layout.box()
+            warn.label(
+                text="旧方式: レンダー中クラッシュする場合はオーバーレイへ",
+                icon="ERROR",
+            )
     layout.prop(settings, "debug_profile_ticks")
     layout.prop(settings, "debug_profile_render")
     layout.operator("blipsync.profile_tick", text="現在フレームの処理時間を計測", icon="TIME")

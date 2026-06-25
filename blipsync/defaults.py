@@ -102,18 +102,14 @@ def ensure_blink_eye_slot(eye_slot) -> None:
 
 
 def ensure_blink_mappings(settings) -> None:
-    if settings.blink_mappings:
-        for mapping in settings.blink_mappings:
-            ensure_blink_eye_slot(mapping.left_eye)
-            ensure_blink_eye_slot(mapping.right_eye)
-        return
-
-    mapping = settings.blink_mappings.add()
-    mapping.name = "デフォルト"
-    ensure_blink_eye_slot(mapping.left_eye)
-    ensure_blink_eye_slot(mapping.right_eye)
-    _migrate_legacy_blink_eye(settings.blink_left_eye, mapping.left_eye)
-    _migrate_legacy_blink_eye(settings.blink_right_eye, mapping.right_eye)
+    if not settings.blink_mappings:
+        mapping = settings.blink_mappings.add()
+        mapping.name = "デフォルト"
+    for mapping in settings.blink_mappings:
+        ensure_blink_eye_slot(mapping.left_eye)
+        ensure_blink_eye_slot(mapping.right_eye)
+        _migrate_legacy_blink_eye(settings.blink_left_eye, mapping.left_eye)
+        _migrate_legacy_blink_eye(settings.blink_right_eye, mapping.right_eye)
 
 
 def peek_channel_mapping(settings, channel_target):
@@ -393,6 +389,24 @@ def merge_unconfigured_high_emotion_weights(
     return merged
 
 
+def emotion_expr_drive_ratio(
+    label: str,
+    weights: dict[str, float],
+    emotion_mapping,
+) -> float:
+    """Weight ratio for an expr, driving unconfigured *_High binds from the normal slot."""
+    merged = merge_unconfigured_high_emotion_weights(weights, emotion_mapping)
+    expr_by_label = {expr.label: expr for expr in emotion_mapping.emotion_exprs}
+    for high_label, normal_label in EMOTION_HIGH_NORMAL_PAIRS:
+        if label != high_label:
+            continue
+        expr = expr_by_label.get(high_label)
+        if expr is None or emotion_expr_is_configured(expr):
+            break
+        return merged.get(normal_label, 0.0)
+    return merged.get(label, 0.0)
+
+
 def emotion_mapping_is_configured(emotion_mapping) -> bool:
     for expr in emotion_mapping.emotion_exprs:
         if emotion_expr_is_configured(expr):
@@ -418,6 +432,32 @@ def blink_mapping_is_configured(blink_mapping) -> bool:
 
 def blink_is_configured(settings) -> bool:
     return any(blink_mapping_is_configured(mapping) for mapping in settings.blink_mappings)
+
+
+def scene_has_active_previews(settings) -> bool:
+    """True when any editor preview slider is non-zero (paused viewport only)."""
+    for mapping in settings.phoneme_mappings:
+        for expr in mapping.phoneme_exprs:
+            if float(expr.preview_amount) > 1e-8:
+                return True
+    for mapping in settings.emotion_mappings:
+        for expr in mapping.emotion_exprs:
+            if float(expr.preview_amount) > 1e-8:
+                return True
+    for mapping in settings.blink_mappings:
+        for eye_slot in (mapping.left_eye, mapping.right_eye):
+            if float(eye_slot.preview_amount) > 1e-8:
+                return True
+    for mapping in settings.breathing_mappings:
+        if float(mapping.targets.preview_amount) > 1e-8:
+            return True
+    from .properties import MICRO_MOTION_ALL_SLOT_ATTRS
+
+    for mapping in settings.micro_motion_mappings:
+        for attr in MICRO_MOTION_ALL_SLOT_ATTRS:
+            if float(getattr(mapping, attr).preview_amount) > 1e-8:
+                return True
+    return False
 
 
 def check_emotion_configured(scene: bpy.types.Scene) -> tuple[bool, str]:

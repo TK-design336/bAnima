@@ -22,6 +22,7 @@ from .defaults import (
 )
 from .layer_applicator import apply_layered_pose, apply_layered_shape, procedural_delta
 from .motion_layer_state import LAYER_BREATHING, LAYER_MICRO
+from .pose_bind_order import iter_pose_binds_sorted, sort_pose_binds
 from .properties import MICRO_MOTION_ALL_SLOT_ATTRS, MICRO_MOTION_GAZE_SHAPE_SLOTS
 from .pose_motion import motion_pose_final_value
 
@@ -31,7 +32,7 @@ def reset_bind_slot(bind_slot) -> None:
         kb = get_shape_key(bind.mesh, bind.shape_key)
         if kb:
             kb.value = kb.slider_min
-    for pose_bind in bind_slot.pose_binds:
+    for pose_bind in sort_pose_binds(bind_slot.pose_binds):
         if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
             continue
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -100,6 +101,7 @@ def _apply_layered_pose(
     insert_keyframes: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
 ) -> float:
     return apply_layered_pose(
         bone,
@@ -111,6 +113,7 @@ def _apply_layered_pose(
         insert_keyframes=insert_keyframes,
         keyframe_tracker=keyframe_tracker,
         layer=layer,
+        track_layer_state=track_layer_state,
     )
 
 
@@ -124,6 +127,8 @@ def _apply_layered_shape(
     insert_keyframes: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
+    apply_context=None,
 ) -> float:
     return apply_layered_shape(
         kb,
@@ -134,6 +139,8 @@ def _apply_layered_shape(
         insert_keyframes=insert_keyframes,
         keyframe_tracker=keyframe_tracker,
         layer=layer,
+        track_layer_state=track_layer_state,
+        apply_context=apply_context,
     )
 
 
@@ -146,9 +153,10 @@ def _apply_head_sway_to_bind_slot(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
 ) -> None:
     """Apply per pose-bind head offsets (each bind has its own schedule)."""
-    for bind_index, pose_bind in enumerate(bind_slot.pose_binds):
+    for bind_index, pose_bind in iter_pose_binds_sorted(bind_slot.pose_binds):
         if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
             continue
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -169,6 +177,7 @@ def _apply_head_sway_to_bind_slot(
             insert_keyframes=insert_keyframes,
             keyframe_tracker=keyframe_tracker,
             layer=layer,
+            track_layer_state=track_layer_state,
         )
 
 
@@ -182,8 +191,9 @@ def _apply_pose_offset_to_bind_slot(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
 ) -> None:
-    for pose_bind in bind_slot.pose_binds:
+    for pose_bind in sort_pose_binds(bind_slot.pose_binds):
         if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
             continue
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -205,6 +215,7 @@ def _apply_pose_offset_to_bind_slot(
             insert_keyframes=insert_keyframes,
             keyframe_tracker=keyframe_tracker,
             layer=layer,
+            track_layer_state=track_layer_state,
         )
 
 
@@ -219,8 +230,9 @@ def _apply_gaze_saccade_to_bind_slot(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
 ) -> None:
-    for pose_bind in bind_slot.pose_binds:
+    for pose_bind in sort_pose_binds(bind_slot.pose_binds):
         if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
             continue
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -240,6 +252,7 @@ def _apply_gaze_saccade_to_bind_slot(
             insert_keyframes=insert_keyframes,
             keyframe_tracker=keyframe_tracker,
             layer=layer,
+            track_layer_state=track_layer_state,
         )
 
 
@@ -253,6 +266,7 @@ def _apply_morph_amount_to_bind_slot(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
 ) -> None:
     morph_blend = max(0.0, min(1.0, amount)) * max_blend
     for bind in bind_slot.binds:
@@ -324,6 +338,8 @@ def _apply_phase_to_bind_slot(
     motion_amount_mode: bool = False,
     base_cache: Optional["BakeBaseCache"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
+    apply_context=None,
 ) -> None:
     phase_blend = max(0.0, min(1.0, amount)) * max_blend
 
@@ -345,10 +361,12 @@ def _apply_phase_to_bind_slot(
                 insert_keyframes=insert_keyframes,
                 keyframe_tracker=keyframe_tracker,
                 layer=layer,
+                track_layer_state=track_layer_state,
+                apply_context=apply_context,
             )
 
     if not morph_only:
-        for pose_bind in bind_slot.pose_binds:
+        for pose_bind in sort_pose_binds(bind_slot.pose_binds):
             if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
                 continue
             if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -374,6 +392,7 @@ def _apply_phase_to_bind_slot(
                 insert_keyframes=insert_keyframes,
                 keyframe_tracker=keyframe_tracker,
                 layer=layer,
+                track_layer_state=track_layer_state,
             )
 
 
@@ -387,6 +406,9 @@ def apply_breathing_mapping(
     reset: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    pose_only: bool = False,
+    track_layer_state: bool = True,
+    apply_context=None,
 ) -> None:
     if not breathing_mapping_is_configured(mapping):
         return
@@ -403,6 +425,9 @@ def apply_breathing_mapping(
         motion_amount_mode=True,
         base_cache=base_cache,
         layer=LAYER_BREATHING,
+        pose_only=pose_only,
+        track_layer_state=track_layer_state,
+        apply_context=apply_context,
     )
 
 
@@ -416,6 +441,9 @@ def apply_micro_motion_mapping(
     reset: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    pose_only: bool = False,
+    track_layer_state: bool = True,
+    apply_context=None,
 ) -> None:
     if not micro_motion_mapping_is_configured(mapping):
         return
@@ -436,6 +464,8 @@ def apply_micro_motion_mapping(
         keyframe_tracker=keyframe_tracker,
         base_cache=base_cache,
         layer=LAYER_MICRO,
+        track_layer_state=track_layer_state,
+        apply_context=apply_context,
     )
 
     _apply_head_sway_to_bind_slot(mapping.head, head_binds, **kw)
@@ -449,7 +479,7 @@ def apply_micro_motion_mapping(
                 gaze_vertical,
                 **kw,
             )
-    else:
+    elif not pose_only:
         for attr, _label in MICRO_MOTION_GAZE_SHAPE_SLOTS:
             _apply_morph_amount_to_bind_slot(
                 getattr(mapping, attr),
@@ -464,6 +494,7 @@ def apply_micro_motion_mapping(
         max_blend,
         morph_offset=eyebrow_noise,
         motion_amount_mode=True,
+        pose_only=pose_only,
         **kw,
     )
     _apply_phase_to_bind_slot(
@@ -472,5 +503,6 @@ def apply_micro_motion_mapping(
         max_blend,
         morph_offset=mouth_noise,
         motion_amount_mode=True,
+        pose_only=pose_only,
         **kw,
     )

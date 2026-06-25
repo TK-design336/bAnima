@@ -22,6 +22,7 @@ from .blend_targets import (
     reset_pose_value as _reset_pose_value,
     set_pose_value as _set_pose_value,
 )
+from .motion_layer_state import LAYER_PHONEME
 from .layer_applicator import apply_layered_pose, apply_layered_shape
 from .pose_motion import procedural_pose_from_blend
 
@@ -64,6 +65,8 @@ def apply_weights(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     only_labels: Optional[Set[str]] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    apply_context=None,
+    track_layer_state: bool = True,
 ) -> None:
     settings = scene.blipsync
     volume = weights.get("__volume__", 0.0)
@@ -112,6 +115,9 @@ def apply_weights(
         base_cache=base_cache,
         insert_keyframes=insert_keyframes,
         keyframe_tracker=keyframe_tracker,
+        layer=LAYER_PHONEME,
+        apply_context=apply_context,
+        track_layer_state=track_layer_state,
     )
     for kb, mesh, target in shape_targets.values():
         apply_layered_shape(kb, mesh, target, **kw)

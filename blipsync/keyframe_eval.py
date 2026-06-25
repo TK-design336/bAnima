@@ -18,10 +18,48 @@ def _escape_path_name(name: str) -> str:
     return name.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _find_fcurve_in_collection(fcurves, data_path: str, index: int) -> Optional[object]:
+    if fcurves is None:
+        return None
+    try:
+        return fcurves.find(data_path, index=index)
+    except (AttributeError, TypeError):
+        return None
+
+
+def _iter_action_fcurve_collections(action, slot=None):
+    """Yield FCurve collections for layered/slotted actions (Blender 4.4+)."""
+    if action is None:
+        return
+    # Legacy proxy — first slot; kept as fallback.
+    yield action.fcurves
+    if slot is None:
+        return
+    layers = getattr(action, "layers", None)
+    if layers is None:
+        return
+    for layer in layers:
+        strips = getattr(layer, "strips", None)
+        if strips is None:
+            continue
+        for strip in strips:
+            if getattr(strip, "type", None) != "KEYFRAME":
+                continue
+            channelbag = strip.channelbag(slot, ensure=False)
+            if channelbag is not None:
+                yield channelbag.fcurves
+
+
 def _find_fcurve(anim_data, data_path: str, index: int = 0):
     if not anim_data or not anim_data.action:
         return None
-    return anim_data.action.fcurves.find(data_path, index=index)
+    action = anim_data.action
+    slot = getattr(anim_data, "action_slot", None)
+    for fcurves in _iter_action_fcurve_collections(action, slot):
+        fc = _find_fcurve_in_collection(fcurves, data_path, index)
+        if fc is not None:
+            return fc
+    return None
 
 
 def _eval_fcurve(anim_data, data_path: str, index: int, frame: float) -> Optional[float]:

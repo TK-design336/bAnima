@@ -48,6 +48,7 @@ def capture_tick_keyframe_bases(
     include_all_breathing_mappings: bool = False,
     include_all_micro_motion_mappings: bool = False,
     refresh_frame: bool = False,
+    prefer_rest_for_uncached_emotion_layer: bool = False,
 ) -> BakeBaseCache:
     """Snapshot bind bases for the current frame.
 
@@ -86,7 +87,11 @@ def capture_tick_keyframe_bases(
     if phoneme_mappings:
         cache.capture_phoneme_mappings(phoneme_mappings, frame)
     if emotion_mappings:
-        cache.capture_emotion_mappings(emotion_mappings, frame)
+        cache.capture_emotion_mappings(
+            emotion_mappings,
+            frame,
+            prefer_rest_for_uncached_layer=prefer_rest_for_uncached_emotion_layer,
+        )
 
     if include_blink or include_all_blink_mappings:
         blink_mappings = [
@@ -112,7 +117,13 @@ def capture_tick_keyframe_bases(
     return cache
 
 
-def capture_scene_preview_bases(scene: bpy.types.Scene, settings, frame: int) -> BakeBaseCache:
+def capture_scene_preview_bases(
+    scene: bpy.types.Scene,
+    settings,
+    frame: int,
+    *,
+    refresh_frame: bool = True,
+) -> BakeBaseCache:
     """Keyframe bases for editor preview sliders (all mapping slots)."""
     return capture_tick_keyframe_bases(
         scene,
@@ -123,5 +134,5 @@ def capture_scene_preview_bases(scene: bpy.types.Scene, settings, frame: int) ->
         include_all_blink_mappings=True,
         include_all_breathing_mappings=True,
         include_all_micro_motion_mappings=True,
-        refresh_frame=True,
+        refresh_frame=refresh_frame,
     )

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .apply_context import ApplyContext
+
 _EULER_ROTATION_MODES = frozenset({"XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"})
 
 
@@ -14,6 +19,34 @@ def get_shape_key(obj, name: str):
 
 def clamp_shape_key_value(kb, value: float) -> float:
     return max(kb.slider_min, min(kb.slider_max, value))
+
+
+def read_shape_key_value(kb, *, apply_context: Optional["ApplyContext"] = None) -> float:
+    if apply_context is not None and apply_context.shape_write_silent():
+        from .dna_apply import dna_read_shape_key_value
+
+        dna_val = dna_read_shape_key_value(kb)
+        if dna_val is not None:
+            return float(dna_val)
+    return float(kb.value)
+
+
+def set_shape_key_value(
+    kb,
+    mesh,
+    value: float,
+    *,
+    apply_context: Optional["ApplyContext"] = None,
+) -> float:
+    final = clamp_shape_key_value(kb, value)
+    # Overlay render: RNA under locked interface (EEVEE needs depsgraph-visible RNA;
+    # DNA-only writes are invisible to the render pipeline).
+    kb.value = final
+    if apply_context is not None and apply_context.uses_overlay():
+        from .dna_apply import tag_shape_key_mesh_update
+
+        tag_shape_key_mesh_update(mesh)
+    return final
 
 
 def pose_axis_rest_value(axis: str) -> float:

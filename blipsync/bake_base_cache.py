@@ -7,8 +7,20 @@ from typing import Iterable, Optional, Tuple
 import bpy
 
 from .blend_targets import get_shape_key, pose_axis_rest_value
-from .keyframe_eval import try_eval_pose_axis_fcurve, try_eval_shape_key_fcurve
-from .motion_layer_state import get_motion_layer_state, LAYER_BREATHING, LAYER_MICRO, reset_motion_layer_state
+from .keyframe_eval import (
+    eval_pose_axis_value,
+    try_eval_pose_axis_fcurve,
+    try_eval_shape_key_fcurve,
+)
+from .motion_layer_state import (
+    LAYER_BLINK,
+    LAYER_BREATHING,
+    LAYER_EMOTION,
+    LAYER_MICRO,
+    LAYER_PHONEME,
+    get_motion_layer_state,
+    reset_motion_layer_state,
+)
 from .properties import MICRO_MOTION_ALL_SLOT_ATTRS
 
 TrackKey = Tuple
@@ -59,11 +71,13 @@ class BakeBaseCache:
             return keyed
         kb = get_shape_key(mesh, shape_key_name)
         rest = float(kb.slider_min) if kb is not None else 0.0
-        current = float(kb.value) if kb is not None else rest
-        slot_key = get_motion_layer_state().shape_key(mesh, shape_key_name, layer)
-        return get_motion_layer_state().resolve_base(
-            slot_key, current, rest_fallback=rest,
-        )
+        if kb is None:
+            return rest
+        current = float(kb.value)
+        tracked_delta = get_motion_layer_state().tracked_shape_delta(mesh, shape_key_name)
+        if abs(tracked_delta) > 1e-8:
+            return current - tracked_delta
+        return rest
 
     def _pose_bind_base(
         self,
@@ -73,24 +87,45 @@ class BakeBaseCache:
         frame: int,
         *,
         layer: str = "",
+        prefer_rest_for_uncached_layer: bool = False,
     ) -> float:
         keyed = try_eval_pose_axis_fcurve(armature, bone_name, axis, frame)
         if keyed is not None:
             return keyed
         bone = armature.pose.bones.get(bone_name)
         if bone is None:
-            return 0.0
+            return pose_axis_rest_value(axis)
         from .blend_targets import get_pose_value
 
-        rest = pose_axis_rest_value(axis)
         current = get_pose_value(bone, axis)
-        slot_key = get_motion_layer_state().pose_key(armature, bone_name, axis, layer)
-        return get_motion_layer_state().resolve_base(
-            slot_key,
-            current,
-            rest_fallback=rest,
-            rotation=axis.startswith("ROT"),
-        )
+        rest_anim = eval_pose_axis_value(armature, bone_name, axis, frame)
+        layer_state = get_motion_layer_state()
+        if layer:
+            key = layer_state.pose_key(armature, bone_name, axis, layer)
+            captured = layer_state.capture_base(
+                key,
+                current,
+                rest_fallback=rest_anim,
+                rotation=axis.startswith("ROT"),
+            )
+            if prefer_rest_for_uncached_layer:
+                # Depsgraph-triggered reapply can revisit the same frame after
+                # bookkeeping reset; in that path current may already include
+                # procedural output, so force keyframed/rest base instead.
+                entry = layer_state._entries.get(key)  # noqa: SLF001
+                if entry is None or entry.last_written is None or entry.last_base is None:
+                    captured = rest_anim
+            return captured
+        tracked = layer_state.tracked_pose_delta(armature, bone_name, axis)
+        if abs(tracked) > 1e-8:
+            stripped = current - tracked
+            eps = max(1e-5, abs(rest_anim) * 1e-6)
+            if abs(current - rest_anim) <= eps:
+                return rest_anim
+            if abs(stripped - rest_anim) <= eps:
+                return rest_anim
+            return stripped
+        return rest_anim
 
     def _capture_shape_bind(self, bind, frame: int, *, layer: str = "") -> None:
         if not bind.mesh or not bind.shape_key:
@@ -103,7 +138,14 @@ class BakeBaseCache:
             bind.mesh, bind.shape_key, frame, layer=layer,
         )
 
-    def _capture_pose_bind(self, pose_bind, frame: int, *, layer: str = "") -> None:
+    def _capture_pose_bind(
+        self,
+        pose_bind,
+        frame: int,
+        *,
+        layer: str = "",
+        prefer_rest_for_uncached_layer: bool = False,
+    ) -> None:
         if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
             return
         if pose_bind.pose_bone not in pose_bind.armature.pose.bones:
@@ -117,6 +159,7 @@ class BakeBaseCache:
             pose_bind.pose_axis,
             frame,
             layer=layer,
+            prefer_rest_for_uncached_layer=prefer_rest_for_uncached_layer,
         )
 
     def _capture_pose_bind_live(self, pose_bind, frame: int, *, layer: str = "") -> None:
@@ -137,26 +180,47 @@ class BakeBaseCache:
             for bind in expr.binds:
                 self._capture_shape_bind(bind, frame)
             for pose_bind in expr.pose_binds:
-                self._capture_pose_bind(pose_bind, frame)
+                self._capture_pose_bind(pose_bind, frame, layer=LAYER_PHONEME)
 
-    def capture_emotion_mapping(self, mapping, frame: int) -> None:
+    def capture_emotion_mapping(
+        self,
+        mapping,
+        frame: int,
+        *,
+        prefer_rest_for_uncached_layer: bool = False,
+    ) -> None:
         for expr in mapping.emotion_exprs:
             for bind in expr.binds:
                 self._capture_shape_bind(bind, frame)
             for pose_bind in expr.pose_binds:
-                self._capture_pose_bind(pose_bind, frame)
+                self._capture_pose_bind(
+                    pose_bind,
+                    frame,
+                    layer=LAYER_EMOTION,
+                    prefer_rest_for_uncached_layer=prefer_rest_for_uncached_layer,
+                )
 
     def capture_blink_mapping(self, mapping, frame: int) -> None:
-        self.capture_bind_slot(mapping.left_eye, frame)
-        self.capture_bind_slot(mapping.right_eye, frame)
+        self.capture_bind_slot(mapping.left_eye, frame, layer=LAYER_BLINK)
+        self.capture_bind_slot(mapping.right_eye, frame, layer=LAYER_BLINK)
 
     def capture_phoneme_mappings(self, mappings: Iterable, frame: int) -> None:
         for mapping in mappings:
             self.capture_phoneme_mapping(mapping, frame)
 
-    def capture_emotion_mappings(self, mappings: Iterable, frame: int) -> None:
+    def capture_emotion_mappings(
+        self,
+        mappings: Iterable,
+        frame: int,
+        *,
+        prefer_rest_for_uncached_layer: bool = False,
+    ) -> None:
         for mapping in mappings:
-            self.capture_emotion_mapping(mapping, frame)
+            self.capture_emotion_mapping(
+                mapping,
+                frame,
+                prefer_rest_for_uncached_layer=prefer_rest_for_uncached_layer,
+            )
 
     def capture_blink_mappings(self, mappings: Iterable, frame: int) -> None:
         for mapping in mappings:
@@ -169,7 +233,7 @@ class BakeBaseCache:
     def capture_micro_motion_mappings(self, mappings: Iterable, frame: int) -> None:
         for mapping in mappings:
             for attr in MICRO_MOTION_ALL_SLOT_ATTRS:
-                self.capture_bind_slot(getattr(mapping, attr), frame)
+                self.capture_bind_slot(getattr(mapping, attr), frame, layer=LAYER_MICRO)
 
     def capture_micro_motion_mappings_live(self, mappings: Iterable, frame: int) -> None:
         """Micro-motion bases from the current pose (after lip/breathing this tick)."""

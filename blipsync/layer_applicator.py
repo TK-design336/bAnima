@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .apply_context import ApplyContext
     from .bake_base_cache import BakeBaseCache
     from .bake_keyframes import BakeKeyframeTracker
 
@@ -13,7 +14,9 @@ from .blend_targets import (
     get_pose_value,
     keyframe_pose_axis,
     pose_axis_rest_value,
+    read_shape_key_value,
     set_pose_value,
+    set_shape_key_value,
 )
 from .keyframe_eval import eval_pose_axis_value, eval_shape_key_value, try_eval_pose_axis_fcurve
 from .motion_layer_state import get_motion_layer_state, LAYER_MICRO
@@ -35,9 +38,10 @@ def _resolve_pose_base(
 ) -> float:
     if base_cache is not None and frame is not None:
         if base_cache.has_pose_base(armature, bone_name, axis, frame):
-            return base_cache.pose_base(
+            value = base_cache.pose_base(
                 armature, bone_name, axis, frame, fallback=0.0,
             )
+            return value
     if layer == LAYER_MICRO:
         return micro_pose_base(armature, bone_name, axis, frame)
     keyed = try_eval_pose_axis_fcurve(armature, bone_name, axis, frame) if frame is not None else None
@@ -47,15 +51,20 @@ def _resolve_pose_base(
     if bone is None:
         return pose_axis_rest_value(axis)
     current = get_pose_value(bone, axis)
-    rest = pose_axis_rest_value(axis)
+    rest = (
+        eval_pose_axis_value(armature, bone_name, axis, frame)
+        if frame is not None
+        else pose_axis_rest_value(axis)
+    )
     if not layer:
         return current
-    return get_motion_layer_state().resolve_base(
+    resolved = get_motion_layer_state().resolve_base(
         get_motion_layer_state().pose_key(armature, bone_name, axis, layer),
         current,
         rest_fallback=rest,
         rotation=axis.startswith("ROT"),
     )
+    return resolved
 
 
 def _resolve_shape_base(
@@ -64,6 +73,8 @@ def _resolve_shape_base(
     kb,
     frame: Optional[int],
     base_cache: Optional["BakeBaseCache"],
+    *,
+    apply_context: Optional["ApplyContext"] = None,
 ) -> float:
     if base_cache is not None and frame is not None:
         if base_cache.has_shape_base(mesh, shape_key_name, frame):
@@ -72,7 +83,7 @@ def _resolve_shape_base(
             )
     if frame is not None:
         return eval_shape_key_value(mesh, shape_key_name, frame)
-    return float(kb.value) if kb is not None else 0.0
+    return read_shape_key_value(kb, apply_context=apply_context) if kb is not None else 0.0
 
 
 def apply_layered_pose(
@@ -86,6 +97,8 @@ def apply_layered_pose(
     insert_keyframes: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
+    apply_context: Optional["ApplyContext"] = None,
 ) -> float:
     rest = pose_axis_rest_value(axis)
     delta = procedural_delta(procedural, rest)
@@ -94,7 +107,7 @@ def apply_layered_pose(
     )
     final = base + delta
     set_pose_value(bone, axis, final)
-    if not insert_keyframes:
+    if track_layer_state and not insert_keyframes:
         layer_state = get_motion_layer_state()
         layer_state.commit(
             layer_state.pose_key(armature, bone.name, axis, layer),
@@ -122,13 +135,17 @@ def apply_layered_shape(
     insert_keyframes: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     layer: str = "",
+    track_layer_state: bool = True,
+    apply_context: Optional["ApplyContext"] = None,
 ) -> float:
     rest = float(kb.slider_min)
     delta = procedural_delta(procedural_target, rest)
-    base = _resolve_shape_base(mesh, kb.name, kb, frame, base_cache)
+    base = _resolve_shape_base(
+        mesh, kb.name, kb, frame, base_cache, apply_context=apply_context,
+    )
     final = clamp_shape_key_value(kb, base + delta)
-    kb.value = final
-    if not insert_keyframes:
+    set_shape_key_value(kb, mesh, final, apply_context=apply_context)
+    if track_layer_state and not insert_keyframes:
         layer_state = get_motion_layer_state()
         layer_state.commit(
             layer_state.shape_key(mesh, kb.name, layer),

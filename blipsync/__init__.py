@@ -1,7 +1,7 @@
 bl_info = {
     "name": "BlipSync",
     "author": "BlipSync",
-    "version": (0, 6, 33),
+    "version": (0, 6, 63),
     "blender": (3, 6, 0),
     "location": "View3D / Video Sequencer > Sidebar (N) > BlipSync",
     "description": "uLipSync-based lip sync for Blender VSE (realtime & bake)",

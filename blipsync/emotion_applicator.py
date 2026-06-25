@@ -11,7 +11,8 @@ if TYPE_CHECKING:
     from .bake_keyframes import BakeKeyframeTracker
 
 from .blend_targets import get_shape_key, reset_pose_value
-from .defaults import merge_unconfigured_high_emotion_weights
+from .defaults import emotion_expr_drive_ratio, merge_unconfigured_high_emotion_weights
+from .motion_layer_state import LAYER_EMOTION
 from .layer_applicator import apply_layered_pose, apply_layered_shape
 from .pose_motion import procedural_pose_from_blend
 
@@ -54,6 +55,8 @@ def apply_emotion_weights(
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     only_labels: Optional[Set[str]] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    apply_context=None,
+    track_layer_state: bool = True,
 ) -> None:
     settings = scene.blipsync
     if reset:
@@ -68,7 +71,7 @@ def apply_emotion_weights(
         label = expr.label
         if only_labels is not None and label not in only_labels:
             continue
-        ratio = weights.get(label, 0.0)
+        ratio = emotion_expr_drive_ratio(label, weights, emotion_mapping)
 
         for bind in expr.binds:
             if not bind.mesh or not bind.shape_key:
@@ -78,9 +81,10 @@ def apply_emotion_weights(
                 continue
             blend = max(0.0, ratio * settings.max_blend_value)
             target = kb.slider_min + (bind.weight_value - kb.slider_min) * blend
-            shape_targets[(int(bind.mesh.as_pointer()), bind.shape_key)] = (
-                kb, bind.mesh, target,
-            )
+            key = (int(bind.mesh.as_pointer()), bind.shape_key)
+            existing = shape_targets.get(key)
+            if existing is None or target > existing[2]:
+                shape_targets[key] = (kb, bind.mesh, target)
 
         for pose_bind in expr.pose_binds:
             if not pose_bind.armature or pose_bind.armature.type != "ARMATURE":
@@ -90,19 +94,21 @@ def apply_emotion_weights(
             bone = pose_bind.armature.pose.bones[pose_bind.pose_bone]
             drive = max(0.0, ratio * settings.max_blend_value)
             procedural = procedural_pose_from_blend(pose_bind, drive)
-            pose_targets[
-                (
-                    int(pose_bind.armature.as_pointer()),
-                    pose_bind.pose_bone,
-                    pose_bind.pose_axis,
-                )
-            ] = (bone, pose_bind.armature, pose_bind.pose_axis, procedural)
+            key = (
+                int(pose_bind.armature.as_pointer()),
+                pose_bind.pose_bone,
+                pose_bind.pose_axis,
+            )
+            pose_targets[key] = (bone, pose_bind.armature, pose_bind.pose_axis, procedural)
 
     kw = dict(
         frame=frame,
         base_cache=base_cache,
         insert_keyframes=insert_keyframes,
         keyframe_tracker=keyframe_tracker,
+        layer=LAYER_EMOTION,
+        apply_context=apply_context,
+        track_layer_state=track_layer_state,
     )
     for kb, mesh, target in shape_targets.values():
         apply_layered_shape(kb, mesh, target, **kw)

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from .blend_targets import get_shape_key, reset_pose_value
 from .defaults import blink_mapping_is_configured
+from .motion_layer_state import LAYER_BLINK
 from .layer_applicator import apply_layered_pose, apply_layered_shape
 from .pose_motion import procedural_pose_from_blend
 
@@ -58,6 +59,8 @@ def _apply_eye_slot(
     frame: Optional[int] = None,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    apply_context=None,
+    track_layer_state: bool = True,
 ) -> None:
     blink_blend = max(0.0, min(1.0, amount)) * max_blend
     jitter_blend = fac_jitter * fac_jitter_amount * max_blend
@@ -97,6 +100,9 @@ def _apply_eye_slot(
         base_cache=base_cache,
         insert_keyframes=insert_keyframes,
         keyframe_tracker=keyframe_tracker,
+        layer=LAYER_BLINK,
+        apply_context=apply_context,
+        track_layer_state=track_layer_state,
     )
     for kb, mesh, target in shape_targets.values():
         apply_layered_shape(kb, mesh, target, **kw)
@@ -116,6 +122,8 @@ def apply_blink_mapping(
     reset: bool = False,
     keyframe_tracker: Optional["BakeKeyframeTracker"] = None,
     base_cache: Optional["BakeBaseCache"] = None,
+    apply_context=None,
+    track_layer_state: bool = True,
 ) -> None:
     if not blink_mapping_is_configured(blink_mapping):
         return
@@ -131,6 +139,8 @@ def apply_blink_mapping(
         frame=frame,
         keyframe_tracker=keyframe_tracker,
         base_cache=base_cache,
+        apply_context=apply_context,
+        track_layer_state=track_layer_state,
     )
     _apply_eye_slot(
         blink_mapping.left_eye,

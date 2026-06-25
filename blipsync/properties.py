@@ -719,6 +719,26 @@ class BLIpsyncSceneSettings(PropertyGroup):
         ),
         default=True,
     )
+    render_apply_mode: EnumProperty(
+        name="レンダー適用方式",
+        description=(
+            "オーバーレイ: レンダー中はUIロック＋RNA適用（notifier回避・EEVEE反映）。"
+            "RNA直接: 旧方式（クラッシュする場合のみ切り替え）"
+        ),
+        items=(
+            (
+                "OVERLAY",
+                "オーバーレイ（推奨）",
+                "レンダー中UIロック＋RNA適用",
+            ),
+            (
+                "RNA",
+                "RNA直接（旧方式）",
+                "レンダー中も kb.value を直接更新（ロックなし）",
+            ),
+        ),
+        default="OVERLAY",
+    )
     debug_profile_ticks: BoolProperty(
         name="ティック処理時間をコンソールへ出力",
         description="再生・スクラブ時の blipsync 処理時間を System Console に出力",

@@ -3,7 +3,7 @@
 bl_info = {
     "name": "bAnima",
     "author": "bAnima",
-    "version": (0, 2, 60),
+    "version": (0, 2, 87),
     "blender": (3, 6, 0),
     "location": "View3D / Video Sequencer > Sidebar (N) > bAnima",
     "description": "Animation toolkit: Lip & Emotion Sync and more",

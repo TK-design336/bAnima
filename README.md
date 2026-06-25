@@ -25,7 +25,7 @@ bAnimaであなたの3Dキャラクターに、息吹を与えましょう。
 
 ## サンプル動画
 
-[![bAnima サンプル動画](https://img.youtube.com/vi/aFtI2dQhVMQ/maxresdefault.jpg)](https://youtube.com/shorts/rcPDCUSbDMY?feature=share)
+[![bAnima サンプル動画](docs/images/banima-demo-thumbnail.png)](https://youtube.com/shorts/rcPDCUSbDMY?feature=share)
 
 ---
 
